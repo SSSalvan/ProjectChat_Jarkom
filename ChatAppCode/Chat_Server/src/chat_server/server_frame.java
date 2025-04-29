@@ -3,9 +3,10 @@ package chat_server;
 import java.io.*;
 import java.net.*;
 import java.util.*;
+import javax.swing.*;
 
 public class server_frame extends javax.swing.JFrame {
-    ArrayList clientOutputStreams;
+    ArrayList<PrintWriter> clientOutputStreams;
     ArrayList<String> users;
     private Map<String, PrintWriter> userWriters = new HashMap<>();
 
@@ -35,7 +36,7 @@ public class server_frame extends javax.swing.JFrame {
             try {
                 while ((message = reader.readLine()) != null) {
                     ta_chat.append("Received: " + message + "\n");
-                    data = message.split(":", 4);
+                    data = message.split(":", 5);
 
                     if (data[2].equals(connect)) {
                         this.username = data[0];
@@ -51,26 +52,24 @@ public class server_frame extends javax.swing.JFrame {
                     else if (data[2].equals(chat)) {
                         tellEveryone(message);
                     } 
-                    else if (data[2].equals(whisper) && data.length >= 4) {
+                    else if (data[2].equals(whisper) && data.length >= 5) {
                         String recipient = data[1];
                         String sender = data[0];
-                        String whisperMsg = data[3];
+                        String senderIP = data[3];
+                        String whisperMsg = data[4];
                         
-                        // Send to recipient
                         PrintWriter recipientWriter = userWriters.get(recipient);
                         if (recipientWriter != null) {
-                            recipientWriter.println(sender + ":" + recipient + ":Whisper:" + whisperMsg);
+                            recipientWriter.println(sender + ":" + recipient + ":Whisper:" + senderIP + ":" + whisperMsg);
                             recipientWriter.flush();
-                            ta_chat.append("Whisper sent from " + sender + " to " + recipient + "\n");
+                            ta_chat.append("Whisper sent from " + sender + " (" + senderIP + ") to " + recipient + "\n");
                         } else {
                             ta_chat.append("Whisper failed - recipient " + recipient + " not found\n");
-                            // Notify sender that whisper failed
                             client.println("Server:" + sender + ":WhisperFailed:" + recipient);
                             client.flush();
                         }
                         
-                        // Send back to sender for their own display
-                        client.println(sender + ":" + recipient + ":Whisper:" + whisperMsg);
+                        client.println(sender + ":" + recipient + ":Whisper:" + senderIP + ":" + whisperMsg);
                         client.flush();
                     }
                     else {
@@ -86,14 +85,13 @@ public class server_frame extends javax.swing.JFrame {
                 }
                 clientOutputStreams.remove(client);
             }
-        } 
+        }
     }
 
     public server_frame() {
         initComponents();
     }
 
-    @SuppressWarnings("unchecked")
     private void initComponents() {
         jScrollPane1 = new javax.swing.JScrollPane();
         ta_chat = new javax.swing.JTextArea();
@@ -214,25 +212,32 @@ public class server_frame extends javax.swing.JFrame {
         ta_chat.setText("");
     }
 
-    public static void main(String args[]) {
-        java.awt.EventQueue.invokeLater(new Runnable() {
-            @Override
-            public void run() {
-                new server_frame().setVisible(true);
-            }
-        });
-    }
-    
     public class ServerStart implements Runnable {
         @Override
         public void run() {
-            clientOutputStreams = new ArrayList();
-            users = new ArrayList();
+            clientOutputStreams = new ArrayList<PrintWriter>();
+            users = new ArrayList<String>();
 
             try {
                 ServerSocket serverSock = new ServerSocket(2222);
                 ta_chat.append("Server listening on port 2222...\n");
 
+                // Start file transfer server in a separate thread
+                new Thread(() -> {
+                    try {
+                        ServerSocket fileServerSock = new ServerSocket(2223);
+                        ta_chat.append("File transfer server listening on port 2223...\n");
+                        
+                        while (true) {
+                            Socket clientSock = fileServerSock.accept();
+                            new Thread(new FileTransferHandler(clientSock)).start();
+                        }
+                    } catch (Exception ex) {
+                        ta_chat.append("File transfer server error: " + ex.getMessage() + "\n");
+                    }
+                }).start();
+
+                // Main chat server loop
                 while (true) {
                     Socket clientSock = serverSock.accept();
                     PrintWriter writer = new PrintWriter(clientSock.getOutputStream());
@@ -244,6 +249,70 @@ public class server_frame extends javax.swing.JFrame {
                 }
             } catch (Exception ex) {
                 ta_chat.append("Error making a connection. \n");
+            }
+        }
+    }
+
+    private class FileTransferHandler implements Runnable {
+        private Socket sock;
+        
+        public FileTransferHandler(Socket clientSock) {
+            this.sock = clientSock;
+        }
+        
+        @Override
+        public void run() {
+            try {
+                DataInputStream dis = new DataInputStream(sock.getInputStream());
+                String header = dis.readUTF();
+                
+                if (header.contains(":file_transfer:")) {
+                    String[] info = header.split(":");
+                    String sender = info[0];
+                    String recipient = info[1];
+                    String fileName = info[3];
+                    long fileSize = Long.parseLong(info[4]);
+                    
+                    // Notify recipient
+                    PrintWriter recipientWriter = userWriters.get(recipient);
+                    if (recipientWriter != null) {
+                        recipientWriter.println(sender + ":" + recipient + ":incoming_file:" + fileName + ":" + fileSize);
+                        recipientWriter.flush();
+                    }
+                    
+                    // Save file with unique name
+                    File outFile = new File("received_files/" + System.currentTimeMillis() + "_" + fileName);
+                    outFile.getParentFile().mkdirs(); // Create directory if needed
+                    
+                    FileOutputStream fos = new FileOutputStream(outFile);
+                    byte[] buffer = new byte[1024 * 1024]; // 1MB buffer
+                    long totalRead = 0;
+                    
+                    while (totalRead < fileSize) {
+                        int chunkSize = dis.readInt();
+                        dis.readFully(buffer, 0, chunkSize);
+                        fos.write(buffer, 0, chunkSize);
+                        totalRead += chunkSize;
+                        
+                        // Update progress
+                        int progress = (int)((totalRead * 100) / fileSize);
+                        ta_chat.append("Receiving " + fileName + " from " + sender + ": " + progress + "%\n");
+                    }
+                    
+                    fos.close();
+                    ta_chat.append("File received from " + sender + ": " + fileName + "\n");
+                    
+                    // Notify recipient of completed transfer
+                    if (recipientWriter != null) {
+                        recipientWriter.println(sender + ":" + recipient + ":file_received:" + fileName);
+                        recipientWriter.flush();
+                    }
+                }
+                
+                dis.close();
+                sock.close();
+            } catch (Exception e) {
+                ta_chat.append("File transfer error: " + e.getMessage() + "\n");
             }
         }
     }
@@ -264,10 +333,10 @@ public class server_frame extends javax.swing.JFrame {
     }
     
     public void tellEveryone(String message) {
-        Iterator it = clientOutputStreams.iterator();
+        Iterator<PrintWriter> it = clientOutputStreams.iterator();
         while (it.hasNext()) {
             try {
-                PrintWriter writer = (PrintWriter) it.next();
+                PrintWriter writer = it.next();
                 writer.println(message);
                 writer.flush();
                 ta_chat.append("Broadcasting: " + message + "\n");
@@ -275,6 +344,20 @@ public class server_frame extends javax.swing.JFrame {
                 ta_chat.append("Error telling everyone. \n");
             }
         }
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(new Runnable() {
+            public void run() {
+                try {
+                    UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+                server_frame frame = new server_frame();
+                frame.setVisible(true);
+            }
+        });
     }
 
     // Variables declaration

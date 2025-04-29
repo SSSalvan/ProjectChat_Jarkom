@@ -5,6 +5,8 @@ import java.io.*;
 import java.util.*;
 
 import javax.swing.SwingUtilities;
+//for chunking
+import javax.swing.JFileChooser;
 
 public class client_frame extends javax.swing.JFrame 
 {
@@ -87,6 +89,14 @@ public class client_frame extends javax.swing.JFrame
         initComponents();
     }
     
+    private String getLocalIP() {
+        try {
+            return InetAddress.getLocalHost().getHostAddress();
+        } catch (UnknownHostException e) {
+            return "unknown";
+        }
+    }
+    
     //--------------------------//
     
     public class IncomingReader implements Runnable {
@@ -97,7 +107,7 @@ public class client_frame extends javax.swing.JFrame
     
             try {
                 while ((stream = reader.readLine()) != null) {
-                    data = stream.split(":", 4); // Split into max 4 parts
+                    data = stream.split(":", 5); // Now split into max 5 parts
                     
                     if (data.length < 3) continue; // Skip malformed messages
                     
@@ -115,8 +125,10 @@ public class client_frame extends javax.swing.JFrame
                             updateUserList(data.length > 3 ? data[3] : "");
                             break;
                         case "Whisper":
-                            if (data.length > 3 && data[1].equals(username)) {
-                                ta_chat.append("[WHISPER from " + data[0] + "]: " + data[3] + "\n");
+                            if (data.length > 4 && data[1].equals(username)) {
+                                String senderIP = data[3];
+                                String message = data[4];
+                                ta_chat.append("[WHISPER from " + data[0] + " (" + senderIP + ")]: " + message + "\n");
                             }
                             break;
                         case "WhisperFailed":
@@ -163,6 +175,16 @@ public class client_frame extends javax.swing.JFrame
         b_whisper = new javax.swing.JButton();
         tf_whisper = new javax.swing.JTextField();
         lb_whisper = new javax.swing.JLabel();
+
+        // component added for sending file
+        b_sendFile = new javax.swing.JButton();
+        b_sendFile.setText("Send File");
+        b_sendFile.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                b_sendFileActionPerformed(evt);
+            }
+        });
+
         
         lb_whisper.setText("Whisper to:");
         
@@ -287,6 +309,8 @@ public class client_frame extends javax.swing.JFrame
                     .addComponent(tf_whisper)
                     .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                     .addComponent(b_whisper, javax.swing.GroupLayout.PREFERRED_SIZE, 120, javax.swing.GroupLayout.PREFERRED_SIZE)))
+                .addGroup(layout.createSequentialGroup()
+                    .addComponent(b_sendFile, javax.swing.GroupLayout.PREFERRED_SIZE, 100, javax.swing.GroupLayout.PREFERRED_SIZE))
             .addContainerGap())
         .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
             .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
@@ -325,6 +349,8 @@ public class client_frame extends javax.swing.JFrame
             .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                 .addComponent(tf_chat, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addComponent(b_send))
+            .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                .addComponent(b_sendFile))
             .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
             .addComponent(lb_name)
             .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
@@ -375,7 +401,7 @@ public class client_frame extends javax.swing.JFrame
         }
     }//GEN-LAST:event_b_connectActionPerformed
 
-    // Add this action for the whisper button
+    // Action fro whisper button
     private void b_whisperActionPerformed(java.awt.event.ActionEvent evt) {
         String recipient = (String)cb_users.getSelectedItem();
         String message = tf_whisper.getText().trim();
@@ -391,13 +417,93 @@ public class client_frame extends javax.swing.JFrame
         }
         
         try {
-            writer.println(username + ":" + recipient + ":Whisper:" + message);
+            String localIP = getLocalIP();
+            writer.println(username + ":" + recipient + ":Whisper:" + localIP + ":" + message);
             writer.flush();
             // Immediately show the message to the sender
             ta_chat.append("[You whisper to " + recipient + "]: " + message + "\n");
             tf_whisper.setText("");
         } catch (Exception ex) {
             ta_chat.append("Failed to send whisper\n");
+        }
+    }
+
+    // Action for sending file
+    private void b_sendFileActionPerformed(java.awt.event.ActionEvent evt) {
+        if (!isConnected) {
+            ta_chat.append("You must be connected to send files.\n");
+            return;
+        }
+        
+        String recipient = (String)cb_users.getSelectedItem();
+        if (recipient == null || recipient.isEmpty()) {
+            ta_chat.append("Please select a recipient first.\n");
+            return;
+        }
+        
+        JFileChooser fileChooser = new JFileChooser();
+        int returnVal = fileChooser.showOpenDialog(this);
+        
+        if (returnVal == JFileChooser.APPROVE_OPTION) {
+            File file = fileChooser.getSelectedFile();
+            ta_chat.append("Preparing to send file: " + file.getName() + " (" + 
+                formatFileSize(file.length()) + ") to " + recipient + "\n");
+            
+            // Start file transfer in a new thread
+            new Thread(() -> sendFileInChunks(file, recipient)).start();
+        }
+    }
+
+    // format the size of chunking
+    private String formatFileSize(long size) {
+        if (size < 1024) return size + " B";
+        int exp = (int)(Math.log(size) / Math.log(1024));
+        String pre = "KMGTPE".charAt(exp-1) + "";
+        return String.format("%.1f %sB", size / Math.pow(1024, exp), pre);
+    }
+
+    // methods for sending files
+    private void sendFileInChunks(File file, String recipient) {
+        try {
+            // Create a separate socket for file transfer to avoid blocking chat
+            Socket fileSocket = new Socket(address, port + 1); // Using next port
+            DataOutputStream dos = new DataOutputStream(fileSocket.getOutputStream());
+            FileInputStream fis = new FileInputStream(file);
+    
+            // Send file metadata
+            dos.writeUTF(username + ":" + recipient + ":file_transfer:" + 
+                       file.getName() + ":" + file.length());
+            dos.flush();
+    
+            // Send file in chunks
+            byte[] buffer = new byte[1024 * 1024]; // 1MB chunks
+            int bytesRead;
+            long totalSent = 0;
+            
+            while ((bytesRead = fis.read(buffer)) != -1) {
+                dos.writeInt(bytesRead); // Send chunk size
+                dos.write(buffer, 0, bytesRead); // Send chunk data
+                dos.flush();
+                totalSent += bytesRead;
+                
+                // Update progress (optional)
+                int progress = (int)((totalSent * 100) / file.length());
+                SwingUtilities.invokeLater(() -> {
+                    ta_chat.append("Sending " + file.getName() + ": " + progress + "%\n");
+                });
+            }
+    
+            fis.close();
+            dos.close();
+            fileSocket.close();
+            
+            SwingUtilities.invokeLater(() -> {
+                ta_chat.append("File sent successfully: " + file.getName() + "\n");
+            });
+        } catch (Exception e) {
+            SwingUtilities.invokeLater(() -> {
+                ta_chat.append("File send failed: " + e.getMessage() + "\n");
+            });
         }
     }
 
@@ -512,5 +618,9 @@ public class client_frame extends javax.swing.JFrame
     private javax.swing.JButton b_whisper;
     private javax.swing.JTextField tf_whisper;
     private javax.swing.JLabel lb_whisper;
+
+    // variable for send file chunking
+    private javax.swing.JButton b_sendFile;
+
     // End of variables declaration//GEN-END:variables
 }
