@@ -219,53 +219,19 @@ public class server_frame extends javax.swing.JFrame {
             users = new ArrayList<String>();
     
             try {
-                // Display server IP information
-                ta_chat.append("\n=== Network Information ===\n");
-                
-                // Get all network interfaces
-                Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
-                while (interfaces.hasMoreElements()) {
-                    NetworkInterface iface = interfaces.nextElement();
-                    // Skip loopback and inactive interfaces
-                    if (iface.isLoopback() || !iface.isUp()) continue;
-                    
-                    // Display interface name
-                    ta_chat.append("Interface: " + iface.getDisplayName() + "\n");
-                    
-                    // Get all IP addresses for this interface
-                    Enumeration<InetAddress> addresses = iface.getInetAddresses();
-                    while (addresses.hasMoreElements()) {
-                        InetAddress addr = addresses.nextElement();
-                        // Only show IPv4 addresses
-                        if (addr instanceof Inet4Address) {
-                            ta_chat.append("  IP Address: " + addr.getHostAddress() + "\n");
-                        }
-                    }
-                }
+                // Get the most relevant IP address
+                String serverIP = getServerIP();
                 
                 // Create server socket
                 ServerSocket serverSock = new ServerSocket(2222);
-                String localIP = InetAddress.getLocalHost().getHostAddress();
                 ta_chat.append("\n=== Server Started ===\n");
-                ta_chat.append("Main IP: " + localIP + "\n");
+                ta_chat.append("Server IP: " + serverIP + "\n");
                 ta_chat.append("Listening on port: 2222\n");
-                ta_chat.append("Clients should connect to: " + localIP + ":2222\n\n");
+                ta_chat.append("Clients should connect to: " + serverIP + ":2222\n\n");
     
-                // Start file transfer server in a separate thread
-                new Thread(() -> {
-                    try {
-                        ServerSocket fileServerSock = new ServerSocket(2223);
-                        ta_chat.append("File transfer server listening on port 2223...\n");
-                        
-                        while (true) {
-                            Socket clientSock = fileServerSock.accept();
-                            new Thread(new FileTransferHandler(clientSock)).start();
-                        }
-                    } catch (Exception ex) {
-                        ta_chat.append("File transfer server error: " + ex.getMessage() + "\n");
-                    }
-                }).start();
-    
+                // Start file transfer server
+                startFileTransferServer();
+                
                 // Main chat server loop
                 while (true) {
                     Socket clientSock = serverSock.accept();
@@ -274,15 +240,62 @@ public class server_frame extends javax.swing.JFrame {
     
                     Thread listener = new Thread(new ClientHandler(clientSock, writer));
                     listener.start();
-                    ta_chat.append("Got a connection from: " + 
+                    ta_chat.append("New connection from: " + 
                         clientSock.getInetAddress().getHostAddress() + "\n");
                 }
             } catch (Exception ex) {
                 ta_chat.append("Server error: " + ex.getMessage() + "\n");
             }
         }
+    
+        private String getServerIP() throws SocketException {
+            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+            while (interfaces.hasMoreElements()) {
+                NetworkInterface iface = interfaces.nextElement();
+                if (isValidInterface(iface)) {
+                    Enumeration<InetAddress> addresses = iface.getInetAddresses();
+                    while (addresses.hasMoreElements()) {
+                        InetAddress addr = addresses.nextElement();
+                        if (isValidIP(addr)) {
+                            return addr.getHostAddress();
+                        }
+                    }
+                }
+            }
+            return "127.0.0.1"; // Fallback to localhost if no valid IP found
+        }
+    
+        private boolean isValidInterface(NetworkInterface iface) {
+            try {
+                return iface.isUp() && !iface.isLoopback() && !iface.isVirtual() &&
+                       !iface.getDisplayName().contains("Miniport");
+            } catch (SocketException e) {
+                return false;
+            }
+        }
+    
+        private boolean isValidIP(InetAddress addr) {
+            return addr instanceof Inet4Address && 
+                   !addr.getHostAddress().startsWith("169.254.");
+        }
+    
+        private void startFileTransferServer() {
+            new Thread(() -> {
+                try {
+                    ServerSocket fileServerSock = new ServerSocket(2223);
+                    ta_chat.append("File transfer ready on port 2223\n");
+                    
+                    while (true) {
+                        Socket clientSock = fileServerSock.accept();
+                        new Thread(new FileTransferHandler(clientSock)).start();
+                    }
+                } catch (Exception ex) {
+                    ta_chat.append("File server error: " + ex.getMessage() + "\n");
+                }
+            }).start();
+        }
     }
-
+    
     private class FileTransferHandler implements Runnable {
         private Socket sock;
         
