@@ -372,13 +372,16 @@ public class client_frame extends javax.swing.JFrame
     }//GEN-LAST:event_tf_usernameActionPerformed
 
     private void b_connectActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_b_connectActionPerformed
-        if (isConnected == false) 
+        if (!isConnected) 
         {
             username = tf_username.getText();
             tf_username.setEditable(false);
-
+    
             try 
             {
+                address = tf_address.getText().trim();
+                port = Integer.parseInt(tf_port.getText().trim());
+    
                 sock = new Socket(address, port);
                 InputStreamReader streamreader = new InputStreamReader(sock.getInputStream());
                 reader = new BufferedReader(streamreader);
@@ -392,14 +395,16 @@ public class client_frame extends javax.swing.JFrame
                 ta_chat.append("Cannot Connect! Try Again. \n");
                 tf_username.setEditable(true);
             }
-            
+    
             ListenThread();
             
-        } else if (isConnected == true) 
+        } 
+        else 
         {
             ta_chat.append("You are already connected. \n");
         }
     }//GEN-LAST:event_b_connectActionPerformed
+    //AST:event_b_connectActionPerformed
 
     // Action fro whisper button
     private void b_whisperActionPerformed(java.awt.event.ActionEvent evt) {
