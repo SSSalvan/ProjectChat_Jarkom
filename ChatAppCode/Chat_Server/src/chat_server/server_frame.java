@@ -219,7 +219,7 @@ public class server_frame extends javax.swing.JFrame {
             users = new ArrayList<String>();
 
             try {
-                ServerSocket serverSock = new ServerSocket(2222);
+                ServerSocket serverSock = new ServerSocket(2222, 0, InetAddress.getByName("0.0.0.0"));
                 ta_chat.append("Server listening on port 2222...\n");
 
                 // Start file transfer server in a separate thread
