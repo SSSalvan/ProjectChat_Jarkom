@@ -70,24 +70,18 @@ public class client_frame extends javax.swing.JFrame
 
     //--------------------------//
     
-    public void Disconnect() {
-        if (isConnected) {
-            try {
-                sendDisconnect();
-                if (reader != null) reader.close();
-                if (writer != null) writer.close();
-                if (sock != null) sock.close();
-                ta_chat.append("Disconnected successfully.\n");
-            } catch (Exception ex) {
-                ta_chat.append("Error during disconnect: " + ex.getMessage() + "\n");
-            } finally {
-                isConnected = false;
-                reader = null;
-                writer = null;
-                sock = null;
-                tf_username.setEditable(true);
-            }
+    public void Disconnect() 
+    {
+        try 
+        {
+            ta_chat.append("Disconnected.\n");
+            sock.close();
+        } catch(Exception ex) {
+            ta_chat.append("Failed to disconnect. \n");
         }
+        isConnected = false;
+        tf_username.setEditable(true);
+
     }
     
     public client_frame() 
@@ -109,146 +103,46 @@ public class client_frame extends javax.swing.JFrame
         @Override
         public void run() {
             String[] data;
-            String message;
-            
+            String stream;
+    
             try {
-                // Continuously read messages while connected
-                while (isConnected && (message = reader.readLine()) != null) {
-                    final String finalMessage = message;
-                    SwingUtilities.invokeLater(() -> processMessage(finalMessage));
-                }
-            } catch (SocketException e) {
-                // Normal disconnect
-                SwingUtilities.invokeLater(() -> {
-                    if (isConnected) {
-                        ta_chat.append("\nDisconnected from server.\n");
-                        Disconnect();
+                while ((stream = reader.readLine()) != null) {
+                    data = stream.split(":", 5); // Now split into max 5 parts
+                    
+                    if (data.length < 3) continue; // Skip malformed messages
+                    
+                    switch(data[2]) {
+                        case "Chat":
+                            ta_chat.append(data[0] + ": " + data[1] + "\n");
+                            break;
+                        case "Connect":
+                            userAdd(data[0]);
+                            break;
+                        case "Disconnect":
+                            userRemove(data[0]);
+                            break;
+                        case "UserList":
+                            updateUserList(data.length > 3 ? data[3] : "");
+                            break;
+                        case "Whisper":
+                            if (data.length > 4 && data[1].equals(username)) {
+                                String senderIP = data[3];
+                                String message = data[4];
+                                ta_chat.append("[WHISPER from " + data[0] + " (" + senderIP + ")]: " + message + "\n");
+                            }
+                            break;
+                        case "WhisperFailed":
+                            if (data.length > 3 && data[1].equals(username)) {
+                                ta_chat.append("Failed to send whisper to " + data[3] + ": User not found\n");
+                            }
+                            break;
                     }
-                });
-            } catch (IOException e) {
-                // Unexpected error
-                SwingUtilities.invokeLater(() -> {
-                    if (isConnected) {
-                        ta_chat.append("\nConnection error: " + e.getMessage() + "\n");
-                        Disconnect();
-                    }
-                });
-            } finally {
-                // Ensure cleanup if we exit loop
-                SwingUtilities.invokeLater(() -> {
-                    if (isConnected) {
-                        Disconnect();
-                    }
-                });
-            }
-        }
-    
-        private void processMessage(String message) {
-            try {
-                String[] data = message.split(":", 5);
-                
-                if (data.length < 3) {
-                    ta_chat.append("Invalid message format: " + message + "\n");
-                    return;
+                    ta_chat.setCaretPosition(ta_chat.getDocument().getLength());
                 }
-    
-                String sender = data[0];
-                String recipient = data[1];
-                String messageType = data[2];
-                
-                switch(messageType) {
-                    case "Chat":
-                        ta_chat.append(sender + ": " + data[1] + "\n");
-                        break;
-                        
-                    case "Connect":
-                        userAdd(sender);
-                        break;
-                        
-                    case "Disconnect":
-                        userRemove(sender);
-                        break;
-                        
-                    case "UserList":
-                        updateUserList(data.length > 3 ? data[3] : "");
-                        break;
-                        
-                    case "Whisper":
-                        if (data.length > 4 && recipient.equals(username)) {
-                            String senderIP = data[3];
-                            String whisperMsg = data[4];
-                            ta_chat.append("[WHISPER from " + sender + " (" + senderIP + ")]: " + whisperMsg + "\n");
-                        }
-                        break;
-                        
-                    case "WhisperFailed":
-                        if (data.length > 3 && recipient.equals(username)) {
-                            ta_chat.append("Failed to send whisper to " + data[3] + "\n");
-                        }
-                        break;
-                        
-                    case "incoming_file":
-                        if (data.length > 4 && recipient.equals(username)) {
-                            String fileName = data[3];
-                            long fileSize = Long.parseLong(data[4]);
-                            ta_chat.append("\n[INCOMING FILE] From " + sender + ": " + 
-                                         fileName + " (" + formatFileSize(fileSize) + ")\n");
-                        }
-                        break;
-                        
-                    case "file_progress":
-                        if (data.length > 4 && recipient.equals(username)) {
-                            updateFileProgress(data[3], Integer.parseInt(data[4]));
-                        }
-                        break;
-                        
-                    case "file_received":
-                        if (data.length > 4 && recipient.equals(username)) {
-                            ta_chat.append("\n[FILE RECEIVED] " + data[3] + " saved to: " + data[4] + "\n");
-                        }
-                        break;
-                        
-                    default:
-                        ta_chat.append("Unknown message type: " + message + "\n");
-                }
-                
-                // Auto-scroll to bottom
-                ta_chat.setCaretPosition(ta_chat.getDocument().getLength());
-                
-            } catch (Exception e) {
-                ta_chat.append("Error processing message: " + e.getMessage() + "\n");
+            } catch(Exception ex) {
+                ta_chat.append("Connection lost.\n");
+                Disconnect();
             }
-        }
-    
-        private void updateFileProgress(String fileName, int progress) {
-            String currentText = ta_chat.getText();
-            String searchPattern = "Receiving " + fileName + ": ";
-            int lastIndex = currentText.lastIndexOf(searchPattern);
-            
-            if (lastIndex >= 0) {
-                // Update existing progress line
-                int endIndex = currentText.indexOf("\n", lastIndex);
-                if (endIndex < 0) endIndex = currentText.length();
-                ta_chat.replaceRange(searchPattern + progress + "%", lastIndex, endIndex);
-            } else {
-                // Add new progress line
-                ta_chat.append(searchPattern + progress + "%\n");
-            }
-        }
-    
-        private String formatFileSize(long size) {
-            if (size < 1024) return size + " B";
-            int exp = (int)(Math.log(size) / Math.log(1024));
-            String pre = "KMGTPE".charAt(exp-1) + "";
-            return String.format("%.1f %sB", size / Math.pow(1024, exp), pre);
-        }
-    }
-    
-        private String formatFileSize(long size) {
-            if (size < 1024) return size + " B";
-            int exp = (int)(Math.log(size) / Math.log(1024));
-            String pre = "KMGTPE".charAt(exp-1) + "";
-            return String.format("%.1f %sB", size / Math.pow(1024, exp), pre);
         }
     }
     
@@ -477,49 +371,37 @@ public class client_frame extends javax.swing.JFrame
     
     }//GEN-LAST:event_tf_usernameActionPerformed
 
-    private void b_connectActionPerformed(java.awt.event.ActionEvent evt) {
-        if (!isConnected) {
-            username = tf_username.getText().trim();
-            if (username.isEmpty()) {
-                ta_chat.append("Username cannot be empty!\n");
-                return;
+    private void b_connectActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_b_connectActionPerformed
+        if (!isConnected) 
+        {
+            username = tf_username.getText();
+            tf_username.setEditable(false);
+    
+            try 
+            {
+                address = tf_address.getText().trim();
+                port = Integer.parseInt(tf_port.getText().trim());
+    
+                sock = new Socket(address, port);
+                InputStreamReader streamreader = new InputStreamReader(sock.g    etInputStream());
+                reader = new BufferedReader(streamreader);
+                writer = new PrintWriter(sock.getOutputStream());
+                writer.println(username + ":has connected.:Connect");
+                writer.flush(); 
+                isConnected = true; 
+            } 
+            catch (Exception ex) 
+            {
+                ta_chat.append("Cannot Connect! Try Again. \n");
+                tf_username.setEditable(true);
             }
     
-            tf_username.setEditable(false);
-            address = tf_address.getText().trim();
+            ListenThread();
             
-            try {
-                port = Integer.parseInt(tf_port.getText().trim());
-                sock = new Socket(address, port);
-                
-                // Initialize streams
-                InputStreamReader streamReader = new InputStreamReader(sock.getInputStream());
-                reader = new BufferedReader(streamReader);
-                writer = new PrintWriter(sock.getOutputStream());
-                
-                // Send connect message
-                writer.println(username + ":has connected.:Connect");
-                writer.flush();
-                
-                isConnected = true;
-                ta_chat.append("Connected to server!\n");
-                
-                // Start listening thread
-                new Thread(new IncomingReader()).start();
-                
-            } catch (NumberFormatException e) {
-                ta_chat.append("Invalid port number!\n");
-                tf_username.setEditable(true);
-            } catch (ConnectException e) {
-                ta_chat.append("Connection refused. Is server running?\n");
-                tf_username.setEditable(true);
-            } catch (IOException e) {
-                ta_chat.append("Connection error: " + e.getMessage() + "\n");
-                tf_username.setEditable(true);
-                if (sock != null) try { sock.close(); } catch (IOException ex) {}
-            }
-        } else {
-            ta_chat.append("Already connected!\n");
+        } 
+        else 
+        {
+            ta_chat.append("You are already connected. \n");
         }
     }//GEN-LAST:event_b_connectActionPerformed
     //AST:event_b_connectActionPerformed
@@ -588,8 +470,8 @@ public class client_frame extends javax.swing.JFrame
     // methods for sending files
     private void sendFileInChunks(File file, String recipient) {
         try {
-            // Create socket for file transfer
-            Socket fileSocket = new Socket(address, port + 1);
+            // Create a separate socket for file transfer to avoid blocking chat
+            Socket fileSocket = new Socket(address, port + 1); // Using next port
             DataOutputStream dos = new DataOutputStream(fileSocket.getOutputStream());
             FileInputStream fis = new FileInputStream(file);
     
@@ -609,10 +491,10 @@ public class client_frame extends javax.swing.JFrame
                 dos.flush();
                 totalSent += bytesRead;
                 
-                // Update progress
+                // Update progress (optional)
                 int progress = (int)((totalSent * 100) / file.length());
                 SwingUtilities.invokeLater(() -> {
-                    ta_chat.append("Sending " + file.getName() + ": " + progress + "%\r");
+                    ta_chat.append("Sending " + file.getName() + ": " + progress + "%\n");
                 });
             }
     
@@ -621,11 +503,11 @@ public class client_frame extends javax.swing.JFrame
             fileSocket.close();
             
             SwingUtilities.invokeLater(() -> {
-                ta_chat.append("\nFile sent successfully: " + file.getName() + "\n");
+                ta_chat.append("File sent successfully: " + file.getName() + "\n");
             });
         } catch (Exception e) {
             SwingUtilities.invokeLater(() -> {
-                ta_chat.append("\nFile send failed: " + e.getMessage() + "\n");
+                ta_chat.append("File send failed: " + e.getMessage() + "\n");
             });
         }
     }

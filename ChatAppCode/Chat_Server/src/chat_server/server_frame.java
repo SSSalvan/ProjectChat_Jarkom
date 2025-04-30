@@ -295,45 +295,38 @@ public class server_frame extends javax.swing.JFrame {
             }).start();
         }
     }
-
+    
     private class FileTransferHandler implements Runnable {
-    private Socket sock;
-    
-    public FileTransferHandler(Socket clientSock) {
-        this.sock = clientSock;
-    }
-    
-    @Override
-    public void run() {
-        try {
-            DataInputStream dis = new DataInputStream(sock.getInputStream());
-            String header = dis.readUTF();
-            
-            if (header.contains(":file_transfer:")) {
-                String[] info = header.split(":");
-                String sender = info[0];
-                String recipient = info[1];
-                String fileName = info[3];
-                long fileSize = Long.parseLong(info[4]);
+        private Socket sock;
+        
+        public FileTransferHandler(Socket clientSock) {
+            this.sock = clientSock;
+        }
+        
+        @Override
+        public void run() {
+            try {
+                DataInputStream dis = new DataInputStream(sock.getInputStream());
+                String header = dis.readUTF();
                 
-                // Create received_files directory if it doesn't exist
-                File directory = new File("received_files");
-                if (!directory.exists()) {
-                    directory.mkdir();
-                }
-                
-                // Save file with unique name
-                String savePath = "received_files/" + System.currentTimeMillis() + "_" + fileName;
-                File outFile = new File(savePath);
-                
-                // Notify recipient
-                PrintWriter recipientWriter = userWriters.get(recipient);
-                if (recipientWriter != null) {
-                    // Send initial notification
-                    recipientWriter.println(sender + ":" + recipient + ":incoming_file:" + fileName + ":" + fileSize);
-                    recipientWriter.flush();
+                if (header.contains(":file_transfer:")) {
+                    String[] info = header.split(":");
+                    String sender = info[0];
+                    String recipient = info[1];
+                    String fileName = info[3];
+                    long fileSize = Long.parseLong(info[4]);
                     
-                    // Transfer file
+                    // Notify recipient
+                    PrintWriter recipientWriter = userWriters.get(recipient);
+                    if (recipientWriter != null) {
+                        recipientWriter.println(sender + ":" + recipient + ":incoming_file:" + fileName + ":" + fileSize);
+                        recipientWriter.flush();
+                    }
+                    
+                    // Save file with unique name
+                    File outFile = new File("received_files/" + System.currentTimeMillis() + "_" + fileName);
+                    outFile.getParentFile().mkdirs(); // Create directory if needed
+                    
                     FileOutputStream fos = new FileOutputStream(outFile);
                     byte[] buffer = new byte[1024 * 1024]; // 1MB buffer
                     long totalRead = 0;
@@ -344,37 +337,27 @@ public class server_frame extends javax.swing.JFrame {
                         fos.write(buffer, 0, chunkSize);
                         totalRead += chunkSize;
                         
-                        // Send progress updates
-                        if (recipientWriter != null) {
-                            int progress = (int)((totalRead * 100) / fileSize);
-                            recipientWriter.println(sender + ":" + recipient + ":file_progress:" + fileName + ":" + progress);
-                            recipientWriter.flush();
-                        }
+                        // Update progress
+                        int progress = (int)((totalRead * 100) / fileSize);
+                        ta_chat.append("Receiving " + fileName + " from " + sender + ": " + progress + "%\n");
                     }
                     
                     fos.close();
+                    ta_chat.append("File received from " + sender + ": " + fileName + "\n");
                     
-                    // Send completion notification
+                    // Notify recipient of completed transfer
                     if (recipientWriter != null) {
-                        recipientWriter.println(sender + ":" + recipient + ":file_received:" + fileName + ":" + savePath);
+                        recipientWriter.println(sender + ":" + recipient + ":file_received:" + fileName);
                         recipientWriter.flush();
                     }
-                    
-                    ta_chat.append("File transfer completed: " + fileName + " to " + recipient + "\n");
-                } else {
-                    ta_chat.append("Recipient " + recipient + " not found for file transfer\n");
                 }
-            }
-        } catch (Exception e) {
-            ta_chat.append("File transfer error: " + e.getMessage() + "\n");
-        } finally {
-            try {
+                
+                dis.close();
                 sock.close();
-            } catch (IOException e) {
-                ta_chat.append("Error closing socket: " + e.getMessage() + "\n");
+            } catch (Exception e) {
+                ta_chat.append("File transfer error: " + e.getMessage() + "\n");
             }
         }
-    }
     }
     
     public void userAdd(String data) {
