@@ -107,7 +107,7 @@ public class client_frame extends javax.swing.JFrame
     
             try {
                 while ((stream = reader.readLine()) != null) {
-                    data = stream.split(":", 5); // Now split into max 5 parts
+                    data = stream.split(":", 5); // Split into max 5 parts
                     
                     if (data.length < 3) continue; // Skip malformed messages
                     
@@ -115,15 +115,19 @@ public class client_frame extends javax.swing.JFrame
                         case "Chat":
                             ta_chat.append(data[0] + ": " + data[1] + "\n");
                             break;
+                            
                         case "Connect":
                             userAdd(data[0]);
                             break;
+                            
                         case "Disconnect":
                             userRemove(data[0]);
                             break;
+                            
                         case "UserList":
                             updateUserList(data.length > 3 ? data[3] : "");
                             break;
+                            
                         case "Whisper":
                             if (data.length > 4 && data[1].equals(username)) {
                                 String senderIP = data[3];
@@ -131,18 +135,64 @@ public class client_frame extends javax.swing.JFrame
                                 ta_chat.append("[WHISPER from " + data[0] + " (" + senderIP + ")]: " + message + "\n");
                             }
                             break;
+                            
                         case "WhisperFailed":
                             if (data.length > 3 && data[1].equals(username)) {
                                 ta_chat.append("Failed to send whisper to " + data[3] + ": User not found\n");
                             }
                             break;
+                            
+                        case "incoming_file":
+                            if (data.length > 4 && data[1].equals(username)) {
+                                String fileName = data[3];
+                                long fileSize = Long.parseLong(data[4]);
+                                ta_chat.append("\n[INCOMING FILE] From " + data[0] + ": " + 
+                                              fileName + " (" + formatFileSize(fileSize) + ")\n");
+                            }
+                            break;
+                            
+                        case "file_progress":
+                            if (data.length > 4 && data[1].equals(username)) {
+                                String fileName = data[3];
+                                int progress = Integer.parseInt(data[4]);
+                                // Update last line with progress
+                                String text = ta_chat.getText();
+                                int lastNewLine = text.lastIndexOf("\n");
+                                if (lastNewLine >= 0) {
+                                    ta_chat.replaceRange("Receiving " + fileName + ": " + progress + "%", 
+                                                       lastNewLine + 1, text.length());
+                                } else {
+                                    ta_chat.setText("Receiving " + fileName + ": " + progress + "%");
+                                }
+                            }
+                            break;
+                            
+                        case "file_received":
+                            if (data.length > 4 && data[1].equals(username)) {
+                                String fileName = data[3];
+                                String savePath = data[4];
+                                ta_chat.append("\n[FILE RECEIVED] " + fileName + " saved to: " + savePath + "\n");
+                            }
+                            break;
+                            
+                        default:
+                            ta_chat.append("Unknown message type: " + stream + "\n");
                     }
                     ta_chat.setCaretPosition(ta_chat.getDocument().getLength());
                 }
             } catch(Exception ex) {
-                ta_chat.append("Connection lost.\n");
-                Disconnect();
+                SwingUtilities.invokeLater(() -> {
+                    ta_chat.append("\nConnection lost: " + ex.getMessage() + "\n");
+                    Disconnect();
+                });
             }
+        }
+    
+        private String formatFileSize(long size) {
+            if (size < 1024) return size + " B";
+            int exp = (int)(Math.log(size) / Math.log(1024));
+            String pre = "KMGTPE".charAt(exp-1) + "";
+            return String.format("%.1f %sB", size / Math.pow(1024, exp), pre);
         }
     }
     
@@ -383,7 +433,7 @@ public class client_frame extends javax.swing.JFrame
                 port = Integer.parseInt(tf_port.getText().trim());
     
                 sock = new Socket(address, port);
-                InputStreamReader streamreader = new InputStreamReader(sock.getInputStream());
+                InputStreamReader streamreader = new InputStreamReader(sock.g    etInputStream());
                 reader = new BufferedReader(streamreader);
                 writer = new PrintWriter(sock.getOutputStream());
                 writer.println(username + ":has connected.:Connect");
@@ -470,8 +520,8 @@ public class client_frame extends javax.swing.JFrame
     // methods for sending files
     private void sendFileInChunks(File file, String recipient) {
         try {
-            // Create a separate socket for file transfer to avoid blocking chat
-            Socket fileSocket = new Socket(address, port + 1); // Using next port
+            // Create socket for file transfer
+            Socket fileSocket = new Socket(address, port + 1);
             DataOutputStream dos = new DataOutputStream(fileSocket.getOutputStream());
             FileInputStream fis = new FileInputStream(file);
     
@@ -491,10 +541,10 @@ public class client_frame extends javax.swing.JFrame
                 dos.flush();
                 totalSent += bytesRead;
                 
-                // Update progress (optional)
+                // Update progress
                 int progress = (int)((totalSent * 100) / file.length());
                 SwingUtilities.invokeLater(() -> {
-                    ta_chat.append("Sending " + file.getName() + ": " + progress + "%\n");
+                    ta_chat.append("Sending " + file.getName() + ": " + progress + "%\r");
                 });
             }
     
@@ -503,11 +553,11 @@ public class client_frame extends javax.swing.JFrame
             fileSocket.close();
             
             SwingUtilities.invokeLater(() -> {
-                ta_chat.append("File sent successfully: " + file.getName() + "\n");
+                ta_chat.append("\nFile sent successfully: " + file.getName() + "\n");
             });
         } catch (Exception e) {
             SwingUtilities.invokeLater(() -> {
-                ta_chat.append("File send failed: " + e.getMessage() + "\n");
+                ta_chat.append("\nFile send failed: " + e.getMessage() + "\n");
             });
         }
     }
