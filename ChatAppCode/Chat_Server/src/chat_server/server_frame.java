@@ -217,11 +217,40 @@ public class server_frame extends javax.swing.JFrame {
         public void run() {
             clientOutputStreams = new ArrayList<PrintWriter>();
             users = new ArrayList<String>();
-
+    
             try {
-                ServerSocket serverSock = new ServerSocket(2222, 0, InetAddress.getByName("0.0.0.0"));
-                ta_chat.append("Server listening on port 2222...\n");
-
+                // Display server IP information
+                ta_chat.append("\n=== Network Information ===\n");
+                
+                // Get all network interfaces
+                Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+                while (interfaces.hasMoreElements()) {
+                    NetworkInterface iface = interfaces.nextElement();
+                    // Skip loopback and inactive interfaces
+                    if (iface.isLoopback() || !iface.isUp()) continue;
+                    
+                    // Display interface name
+                    ta_chat.append("Interface: " + iface.getDisplayName() + "\n");
+                    
+                    // Get all IP addresses for this interface
+                    Enumeration<InetAddress> addresses = iface.getInetAddresses();
+                    while (addresses.hasMoreElements()) {
+                        InetAddress addr = addresses.nextElement();
+                        // Only show IPv4 addresses
+                        if (addr instanceof Inet4Address) {
+                            ta_chat.append("  IP Address: " + addr.getHostAddress() + "\n");
+                        }
+                    }
+                }
+                
+                // Create server socket
+                ServerSocket serverSock = new ServerSocket(2222);
+                String localIP = InetAddress.getLocalHost().getHostAddress();
+                ta_chat.append("\n=== Server Started ===\n");
+                ta_chat.append("Main IP: " + localIP + "\n");
+                ta_chat.append("Listening on port: 2222\n");
+                ta_chat.append("Clients should connect to: " + localIP + ":2222\n\n");
+    
                 // Start file transfer server in a separate thread
                 new Thread(() -> {
                     try {
@@ -236,19 +265,20 @@ public class server_frame extends javax.swing.JFrame {
                         ta_chat.append("File transfer server error: " + ex.getMessage() + "\n");
                     }
                 }).start();
-
+    
                 // Main chat server loop
                 while (true) {
                     Socket clientSock = serverSock.accept();
                     PrintWriter writer = new PrintWriter(clientSock.getOutputStream());
                     clientOutputStreams.add(writer);
-
+    
                     Thread listener = new Thread(new ClientHandler(clientSock, writer));
                     listener.start();
-                    ta_chat.append("Got a connection. \n");
+                    ta_chat.append("Got a connection from: " + 
+                        clientSock.getInetAddress().getHostAddress() + "\n");
                 }
             } catch (Exception ex) {
-                ta_chat.append("Error making a connection. \n");
+                ta_chat.append("Server error: " + ex.getMessage() + "\n");
             }
         }
     }
