@@ -336,19 +336,24 @@ public class server_frame extends javax.swing.JFrame {
                     String fileName = info[3];
                     long fileSize = Long.parseLong(info[4]);
                     
+                    // Create downloads directory if it doesn't exist
+                    String downloadsPath = System.getProperty("user.home") + "/ChatDownloads/";
+                    new File(downloadsPath).mkdirs();
+                    
+                    String uniqueFileName = System.currentTimeMillis() + "_" + fileName;
+                    File outFile = new File(downloadsPath + uniqueFileName);
+                    
                     // Notify recipient
                     PrintWriter recipientWriter = userWriters.get(recipient);
                     if (recipientWriter != null) {
-                        recipientWriter.println(sender + ":" + recipient + ":incoming_file:" + fileName + ":" + fileSize);
+                        recipientWriter.println(sender + ":" + recipient + ":incoming_file:" + 
+                                             fileName + ":" + fileSize);
                         recipientWriter.flush();
                     }
                     
-                    // Save file with unique name
-                    File outFile = new File("received_files/" + System.currentTimeMillis() + "_" + fileName);
-                    outFile.getParentFile().mkdirs(); // Create directory if needed
-                    
+                    // Save file
                     FileOutputStream fos = new FileOutputStream(outFile);
-                    byte[] buffer = new byte[1024 * 1024]; // 1MB buffer
+                    byte[] buffer = new byte[1024 * 1024];
                     long totalRead = 0;
                     
                     while (totalRead < fileSize) {
@@ -359,15 +364,17 @@ public class server_frame extends javax.swing.JFrame {
                         
                         // Update progress
                         int progress = (int)((totalRead * 100) / fileSize);
-                        ta_chat.append("Receiving " + fileName + " from " + sender + ": " + progress + "%\n");
+                        ta_chat.append("Receiving " + fileName + " from " + sender + 
+                                     ": " + progress + "%\n");
                     }
                     
                     fos.close();
-                    ta_chat.append("File received from " + sender + ": " + fileName + "\n");
+                    ta_chat.append("File saved to: " + outFile.getAbsolutePath() + "\n");
                     
                     // Notify recipient of completed transfer
                     if (recipientWriter != null) {
-                        recipientWriter.println(sender + ":" + recipient + ":file_received:" + fileName);
+                        recipientWriter.println(sender + ":" + recipient + ":file_received:" + 
+                                             uniqueFileName + ":" + downloadsPath);
                         recipientWriter.flush();
                     }
                 }

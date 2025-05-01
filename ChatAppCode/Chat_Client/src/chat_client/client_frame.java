@@ -5,9 +5,16 @@ import java.io.*;
 import java.util.*;
 
 import javax.swing.SwingUtilities;
+import javax.swing.JButton;
 //for chunking
 import javax.swing.JFileChooser;
+import javax.swing.JLabel;
 import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+java
+import java.awt.BorderLayout;
+import java.awt.FlowLayout;
+import java.awt.Window;
 
 public class client_frame extends javax.swing.JFrame 
 {
@@ -98,6 +105,8 @@ public class client_frame extends javax.swing.JFrame
         }
     }
     
+    
+    
     //--------------------------//
     
     public class IncomingReader implements Runnable {
@@ -159,9 +168,15 @@ public class client_frame extends javax.swing.JFrame
                             }
                             break;
                             
-                        case "file_received":
-                            if (data.length > 3 && data[1].equals(username)) {
-                                ta_chat.append("File received from " + data[0] + ": " + data[3] + "\n");
+                            case "file_received":
+                            if (data.length > 4 && data[1].equals(username)) {
+                                String fileName = data[3];
+                                String filePath = data[4];
+                                
+                                SwingUtilities.invokeLater(() -> {
+                                    ta_chat.append("File received from " + data[0] + ": " + fileName + "\n");
+                                    showDownloadCompletePopup(fileName, filePath);
+                                });
                             }
                             break;    
                                             }
@@ -173,6 +188,8 @@ public class client_frame extends javax.swing.JFrame
             }
         }
     }
+
+    
     
 
     //--------------------------//
@@ -540,6 +557,66 @@ public class client_frame extends javax.swing.JFrame
                 ta_chat.append("File send failed: " + e.getMessage() + "\n");
             });
         }
+    }
+
+    private void openDownloadFolder(String fullPath) {
+        try {
+            File file = new File(fullPath);
+            String os = System.getProperty("os.name").toLowerCase();
+            
+            ProcessBuilder pb;
+            if (os.contains("win")) {
+                pb = new ProcessBuilder("explorer.exe", "/select,", file.getAbsolutePath());
+            } else if (os.contains("mac")) {
+                pb = new ProcessBuilder("open", "-R", file.getAbsolutePath());
+            } else {
+                pb = new ProcessBuilder("xdg-open", file.getParent());
+            }
+            pb.start();
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(this,
+                "Could not open folder:\n" + ex.getMessage(),
+                "Error",
+                JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void showDownloadCompletePopup(String fileName, String filePath) {
+        JPanel panel = new JPanel(new BorderLayout(5, 5));
+        
+        // Main message
+        JLabel message = new JLabel(
+            "<html><b>Download Complete!</b><br>" +
+            "File: " + fileName + "<br>" +
+            "Location: " + filePath + "</html>"
+        );
+        panel.add(message, BorderLayout.CENTER);
+        
+        // Button panel
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
+        JButton openFolderBtn = new JButton("Show in Folder");
+        JButton okBtn = new JButton("OK");
+        
+        openFolderBtn.addActionListener(e -> {
+            openDownloadFolder(filePath + fileName);
+            ((Window)SwingUtilities.getRoot(panel)).dispose();
+        });
+        
+        okBtn.addActionListener(e -> {
+            ((Window)SwingUtilities.getRoot(panel)).dispose();
+        });
+        
+        buttonPanel.add(openFolderBtn);
+        buttonPanel.add(okBtn);
+        panel.add(buttonPanel, BorderLayout.SOUTH);
+        
+        // Show the dialog
+        JOptionPane.showMessageDialog(
+            this,
+            panel,
+            "Download Complete",
+            JOptionPane.INFORMATION_MESSAGE
+        );  
     }
 
     private void b_disconnectActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_b_disconnectActionPerformed
