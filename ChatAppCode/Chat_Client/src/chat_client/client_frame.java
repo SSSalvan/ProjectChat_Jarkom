@@ -7,6 +7,7 @@ import java.util.*;
 import javax.swing.SwingUtilities;
 //for chunking
 import javax.swing.JFileChooser;
+import javax.swing.JOptionPane;
 
 public class client_frame extends javax.swing.JFrame 
 {
@@ -136,7 +137,34 @@ public class client_frame extends javax.swing.JFrame
                                 ta_chat.append("Failed to send whisper to " + data[3] + ": User not found\n");
                             }
                             break;
-                    }
+                        case "incoming_file":
+                            if (data.length > 4 && data[1].equals(username)) {
+                                String sender = data[0];
+                                String fileName = data[3];
+                                long fileSize = Long.parseLong(data[4]);
+                                int response = JOptionPane.showConfirmDialog(
+                                    client_frame.this,  // Changed from 'this' to 'client_frame.this'
+                                    "Accept file '" + fileName + "' (" + formatFileSize(fileSize) + ") from " + sender + "?",
+                                    "Incoming File",
+                                    JOptionPane.YES_NO_OPTION
+                                );
+                                
+                                if (response == JOptionPane.YES_OPTION) {
+                                    writer.println(username + ":" + sender + ":file_accept:" + fileName);
+                                    writer.flush();
+                                } else {
+                                    writer.println(username + ":" + sender + ":file_reject:" + fileName);
+                                    writer.flush();
+                                }
+                            }
+                            break;
+                            
+                        case "file_received":
+                            if (data.length > 3 && data[1].equals(username)) {
+                                ta_chat.append("File received from " + data[0] + ": " + data[3] + "\n");
+                            }
+                            break;    
+                                            }
                     ta_chat.setCaretPosition(ta_chat.getDocument().getLength());
                 }
             } catch(Exception ex) {
@@ -376,6 +404,7 @@ public class client_frame extends javax.swing.JFrame
         {
             username = tf_username.getText();
             tf_username.setEditable(false);
+            lb_name.setText(username);
     
             try 
             {
@@ -383,7 +412,7 @@ public class client_frame extends javax.swing.JFrame
                 port = Integer.parseInt(tf_port.getText().trim());
     
                 sock = new Socket(address, port);
-                InputStreamReader streamreader = new InputStreamReader(sock.g    etInputStream());
+                InputStreamReader streamreader = new InputStreamReader(sock.getInputStream());
                 reader = new BufferedReader(streamreader);
                 writer = new PrintWriter(sock.getOutputStream());
                 writer.println(username + ":has connected.:Connect");
@@ -530,6 +559,7 @@ public class client_frame extends javax.swing.JFrame
             
             tf_username.setText(anon);
             tf_username.setEditable(false);
+            lb_name.setText(username);
 
             try 
             {

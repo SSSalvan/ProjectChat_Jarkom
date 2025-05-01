@@ -72,6 +72,26 @@ public class server_frame extends javax.swing.JFrame {
                         client.println(sender + ":" + recipient + ":Whisper:" + senderIP + ":" + whisperMsg);
                         client.flush();
                     }
+                    else if (data[2].equals("file_accept")) {
+                        String recipient = data[0]; // original sender
+                        String sender = data[1]; // original recipient
+                        String fileName = data[3];
+                        PrintWriter senderWriter = userWriters.get(recipient);
+                        if (senderWriter != null) {
+                            senderWriter.println("Server:" + recipient + ":file_accepted:" + fileName);
+                            senderWriter.flush();
+                        }
+                    }
+                    else if (data[2].equals("file_reject")) {
+                        String recipient = data[0]; // original sender
+                        String sender = data[1]; // original recipient
+                        String fileName = data[3];
+                        PrintWriter senderWriter = userWriters.get(recipient);
+                        if (senderWriter != null) {
+                            senderWriter.println("Server:" + recipient + ":file_rejected:" + fileName);
+                            senderWriter.flush();
+                        }
+                    }
                     else {
                         ta_chat.append("No Conditions were met. \n");
                     }
