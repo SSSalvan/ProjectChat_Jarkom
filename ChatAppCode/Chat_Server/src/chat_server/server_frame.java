@@ -218,42 +218,26 @@ public class server_frame extends javax.swing.JFrame {
             pack();
         }
 
-        private void b_endActionPerformed(java.awt.event.ActionEvent evt) {
-            
-            // Notify all clients
-            tellEveryone("Server:Server is shutting down:Disconnect");
-            
-            // Close all client connections
-            for (PrintWriter writer : clientOutputStreams) {
-                try {
-                    writer.close();
-                } catch (Exception ex) {
-                    ta_chat.append("Error closing client writer: " + ex.getMessage() + "\n");
-                }
+    private void b_endActionPerformed(java.awt.event.ActionEvent evt) {
+        // Disconnect all clients first
+        tellEveryone("Server:is stopping and all users will be disconnected.:Chat");
+        
+        // Close all client connections
+        for (PrintWriter writer : clientOutputStreams) {
+            try {
+                writer.close();
+            } catch (Exception ex) {
+                ta_chat.append("Error closing client connection: " + ex.getMessage() + "\n");
             }
-            clientOutputStreams.clear();
-            users.clear();
-            userWriters.clear();
-            
-            // Close server sockets
-            if (serverSock != null) {
-                try {
-                    serverSock.close();
-                } catch (IOException ex) {
-                    ta_chat.append("Error closing server socket: " + ex.getMessage() + "\n");
-                }
-            }
-            
-            if (fileServerSock != null) {
-                try {
-                    fileServerSock.close();
-                } catch (IOException ex) {
-                    ta_chat.append("Error closing file server socket: " + ex.getMessage() + "\n");
-                }
-            }
-            
-            ta_chat.append("Server stopped.\n");
         }
+        
+        // Clear lists
+        clientOutputStreams.clear();
+        users.clear();
+        userWriters.clear();
+        
+        ta_chat.append("Server stopped.\n");
+    }
 
     private void b_startActionPerformed(java.awt.event.ActionEvent evt) {
         Thread starter = new Thread(new ServerStart());
@@ -531,8 +515,4 @@ public class server_frame extends javax.swing.JFrame {
     private javax.swing.JList<String> userList;
     private javax.swing.JScrollPane userScrollPane;
     private DefaultListModel<String> userListModel;
-
-    //end server
-    private ServerSocket serverSock;
-    private ServerSocket fileServerSock;
 }
