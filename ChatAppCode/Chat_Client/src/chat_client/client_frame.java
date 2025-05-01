@@ -11,7 +11,6 @@ import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
-java
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;
 import java.awt.Window;
