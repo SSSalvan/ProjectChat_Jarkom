@@ -116,7 +116,8 @@ public class client_frame extends javax.swing.JFrame
     
             try {
                 while ((stream = reader.readLine()) != null) {
-                    data = stream.split(":", 5); // Now split into max 5 parts
+                    final String message = stream; // Make effectively final for lambda
+                    data = message.split(":", 5); // Now split into max 5 parts
                     
                     if (data.length < 3) continue; // Skip malformed messages
                     
@@ -136,8 +137,8 @@ public class client_frame extends javax.swing.JFrame
                         case "Whisper":
                             if (data.length > 4 && data[1].equals(username)) {
                                 String senderIP = data[3];
-                                String message = data[4];
-                                ta_chat.append("[WHISPER from " + data[0] + " (" + senderIP + ")]: " + message + "\n");
+                                String whisperMsg = data[4];
+                                ta_chat.append("[WHISPER from " + data[0] + " (" + senderIP + ")]: " + whisperMsg + "\n");
                             }
                             break;
                         case "WhisperFailed":
@@ -147,43 +148,52 @@ public class client_frame extends javax.swing.JFrame
                             break;
                         case "incoming_file":
                             if (data.length > 4 && data[1].equals(username)) {
-                                String sender = data[0];
-                                String fileName = data[3];
-                                long fileSize = Long.parseLong(data[4]);
-                                int response = JOptionPane.showConfirmDialog(
-                                    client_frame.this,  // Changed from 'this' to 'client_frame.this'
-                                    "Accept file '" + fileName + "' (" + formatFileSize(fileSize) + ") from " + sender + "?",
-                                    "Incoming File",
-                                    JOptionPane.YES_NO_OPTION
-                                );
+                                final String sender = data[0]; // Make effectively final
+                                final String fileName = data[3]; // Make effectively final
+                                final long fileSize = Long.parseLong(data[4]); // Make effectively final
                                 
-                                if (response == JOptionPane.YES_OPTION) {
-                                    writer.println(username + ":" + sender + ":file_accept:" + fileName);
-                                    writer.flush();
-                                } else {
-                                    writer.println(username + ":" + sender + ":file_reject:" + fileName);
-                                    writer.flush();
-                                }
+                                SwingUtilities.invokeLater(() -> {
+                                    int response = JOptionPane.showConfirmDialog(
+                                        client_frame.this,
+                                        "Accept file '" + fileName + "' (" + formatFileSize(fileSize) + ") from " + sender + "?",
+                                        "Incoming File",
+                                        JOptionPane.YES_NO_OPTION
+                                    );
+                                    
+                                    try {
+                                        if (response == JOptionPane.YES_OPTION) {
+                                            writer.println(username + ":" + sender + ":file_accept:" + fileName);
+                                        } else {
+                                            writer.println(username + ":" + sender + ":file_reject:" + fileName);
+                                        }
+                                        writer.flush();
+                                    } catch (Exception e) {
+                                        ta_chat.append("Error responding to file transfer\n");
+                                    }
+                                });
                             }
                             break;
                             
-                            case "file_received":
+                        case "file_received":
                             if (data.length > 4 && data[1].equals(username)) {
-                                String fileName = data[3];
-                                String filePath = data[4];
+                                final String receivedFrom = data[0]; // Make effectively final
+                                final String fileName = data[3]; // Make effectively final
+                                final String filePath = data[4]; // Make effectively final
                                 
                                 SwingUtilities.invokeLater(() -> {
-                                    ta_chat.append("File received from " + data[0] + ": " + fileName + "\n");
+                                    ta_chat.append("File received from " + receivedFrom + ": " + fileName + "\n");
                                     showDownloadCompletePopup(fileName, filePath);
                                 });
                             }
-                            break;    
-                                            }
+                            break;
+                    }
                     ta_chat.setCaretPosition(ta_chat.getDocument().getLength());
                 }
             } catch(Exception ex) {
-                ta_chat.append("Connection lost.\n");
-                Disconnect();
+                SwingUtilities.invokeLater(() -> {
+                    ta_chat.append("Connection lost.\n");
+                    Disconnect();
+                });
             }
         }
     }
