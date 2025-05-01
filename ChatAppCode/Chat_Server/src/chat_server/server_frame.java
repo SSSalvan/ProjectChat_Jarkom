@@ -219,8 +219,7 @@ public class server_frame extends javax.swing.JFrame {
         }
 
         private void b_endActionPerformed(java.awt.event.ActionEvent evt) {
-            private ServerSocket serverSock;
-            private ServerSocket fileServerSock;
+            
             // Notify all clients
             tellEveryone("Server:Server is shutting down:Disconnect");
             
@@ -532,4 +531,8 @@ public class server_frame extends javax.swing.JFrame {
     private javax.swing.JList<String> userList;
     private javax.swing.JScrollPane userScrollPane;
     private DefaultListModel<String> userListModel;
+
+    //end server
+    private ServerSocket serverSock;
+    private ServerSocket fileServerSock;
 }
