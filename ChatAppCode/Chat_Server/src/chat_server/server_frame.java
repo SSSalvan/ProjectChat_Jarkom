@@ -5,6 +5,7 @@ import java.net.*;
 import java.util.*;
 import javax.swing.*;
 
+
 public class server_frame extends javax.swing.JFrame {
     ArrayList<PrintWriter> clientOutputStreams;
     ArrayList<String> users;
@@ -120,6 +121,11 @@ public class server_frame extends javax.swing.JFrame {
         b_users = new javax.swing.JButton();
         b_clear = new javax.swing.JButton();
         lb_name = new javax.swing.JLabel();
+        userListModel = new DefaultListModel<>();
+        userList = new javax.swing.JList<>(userListModel);
+        userScrollPane = new javax.swing.JScrollPane();
+        userScrollPane.setViewportView(userList);
+        userScrollPane.setPreferredSize(new java.awt.Dimension(150, 200));
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
         setTitle("Chat - Server's frame");
@@ -163,56 +169,74 @@ public class server_frame extends javax.swing.JFrame {
 
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
         getContentPane().setLayout(layout);
-        layout.setHorizontalGroup(
-            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(layout.createSequentialGroup()
-                .addContainerGap()
-                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(jScrollPane1)
-                    .addGroup(layout.createSequentialGroup()
-                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                            .addComponent(b_end, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                            .addComponent(b_start, javax.swing.GroupLayout.DEFAULT_SIZE, 75, Short.MAX_VALUE))
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 291, Short.MAX_VALUE)
-                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                            .addComponent(b_clear, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                            .addComponent(b_users, javax.swing.GroupLayout.DEFAULT_SIZE, 103, Short.MAX_VALUE))))
-                .addContainerGap())
-            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                .addComponent(lb_name)
-                .addGap(209, 209, 209))
-        );
-        layout.setVerticalGroup(
-            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(layout.createSequentialGroup()
-                .addContainerGap()
-                .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 340, Short.MAX_VALUE)
-                .addGap(18, 18, 18)
-                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(b_start)
-                    .addComponent(b_users))
-                .addGap(18, 18, 18)
-                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(b_clear)
-                    .addComponent(b_end))
-                .addGap(4, 4, 4)
-                .addComponent(lb_name))
-        );
 
-        pack();
-    }
+            
+    // Horizontal layout
+    layout.setHorizontalGroup(
+        layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+        .addGroup(layout.createSequentialGroup()
+            .addContainerGap()
+            .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                .addComponent(jScrollPane1)
+                .addGroup(layout.createSequentialGroup()
+                    .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                        .addComponent(b_end, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .addComponent(b_start, javax.swing.GroupLayout.DEFAULT_SIZE, 75, Short.MAX_VALUE))
+                    .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 141, Short.MAX_VALUE)
+                    .addComponent(userScrollPane, javax.swing.GroupLayout.PREFERRED_SIZE, 150, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                    .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                        .addComponent(b_clear, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .addComponent(b_users, javax.swing.GroupLayout.DEFAULT_SIZE, 103, Short.MAX_VALUE))))
+            .addContainerGap())
+        .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
+            .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+            .addComponent(lb_name)
+            .addGap(209, 209, 209))
+    );
+
+    // Vertical layout
+    layout.setVerticalGroup(
+        layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+        .addGroup(layout.createSequentialGroup()
+            .addContainerGap()
+            .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 340, Short.MAX_VALUE)
+                .addComponent(userScrollPane, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+            .addGap(18, 18, 18)
+            .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                .addComponent(b_start)
+                .addComponent(b_users))
+            .addGap(18, 18, 18)
+            .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                .addComponent(b_clear)
+                .addComponent(b_end))
+            .addGap(4, 4, 4)
+            .addComponent(lb_name)
+            ));
+
+            pack();
+        }
 
     private void b_endActionPerformed(java.awt.event.ActionEvent evt) {
-        try {
-            Thread.sleep(5000);
-        } catch(InterruptedException ex) {
-            Thread.currentThread().interrupt();
+        // Disconnect all clients first
+        tellEveryone("Server:is stopping and all users will be disconnected.:Chat");
+        
+        // Close all client connections
+        for (PrintWriter writer : clientOutputStreams) {
+            try {
+                writer.close();
+            } catch (Exception ex) {
+                ta_chat.append("Error closing client connection: " + ex.getMessage() + "\n");
+            }
         }
         
-        tellEveryone("Server:is stopping and all users will be disconnected.:Chat");
-        ta_chat.append("Server stopping... \n");
-        ta_chat.setText("");
+        // Clear lists
+        clientOutputStreams.clear();
+        users.clear();
+        userWriters.clear();
+        
+        ta_chat.append("Server stopped.\n");
     }
 
     private void b_startActionPerformed(java.awt.event.ActionEvent evt) {
@@ -317,83 +341,133 @@ public class server_frame extends javax.swing.JFrame {
     }
     
     private class FileTransferHandler implements Runnable {
-        private Socket sock;
+        private static final int BUFFER_SIZE = 1024 * 1024; // 1MB buffer
+        private final Socket clientSocket;
         
-        public FileTransferHandler(Socket clientSock) {
-            this.sock = clientSock;
+        public FileTransferHandler(Socket clientSocket) {
+            this.clientSocket = clientSocket;
         }
         
         @Override
         public void run() {
-            try {
-                DataInputStream dis = new DataInputStream(sock.getInputStream());
+            try (DataInputStream dis = new DataInputStream(clientSocket.getInputStream())) {
+                // Read file transfer header
                 String header = dis.readUTF();
+                String[] parts = header.split(":", 5); // Split into max 5 parts
                 
-                if (header.contains(":file_transfer:")) {
-                    String[] info = header.split(":");
-                    String sender = info[0];
-                    String recipient = info[1];
-                    String fileName = info[3];
-                    long fileSize = Long.parseLong(info[4]);
+                if (parts.length >= 5 && parts[2].equals("file_transfer")) {
+                    String sender = parts[0];
+                    String recipient = parts[1];
+                    String fileName = parts[3];
+                    long fileSize = Long.parseLong(parts[4]);
+                    
+                    ta_chat.append(String.format(
+                        "Incoming file from %s to %s: %s (%,d bytes)\n", 
+                        sender, recipient, fileName, fileSize
+                    ));
+                    
+                    // Verify recipient is online
+                    PrintWriter recipientWriter = userWriters.get(recipient);
+                    if (recipientWriter == null) {
+                        ta_chat.append("File transfer failed: Recipient " + recipient + " not found\n");
+                        notifySender(sender, "file_failed:" + recipient + ":User not online");
+                        return;
+                    }
                     
                     // Create downloads directory if it doesn't exist
-                    String downloadsPath = System.getProperty("user.home") + "/ChatDownloads/";
-                    new File(downloadsPath).mkdirs();
+                    File downloadsDir = new File(System.getProperty("user.home") + "/ChatDownloads/");
+                    if (!downloadsDir.exists()) {
+                        downloadsDir.mkdirs();
+                    }
                     
+                    // Generate unique filename to prevent overwrites
                     String uniqueFileName = System.currentTimeMillis() + "_" + fileName;
-                    File outFile = new File(downloadsPath + uniqueFileName);
+                    File outputFile = new File(downloadsDir, uniqueFileName);
                     
-                    // Notify recipient
-                    PrintWriter recipientWriter = userWriters.get(recipient);
-                    if (recipientWriter != null) {
-                        recipientWriter.println(sender + ":" + recipient + ":incoming_file:" + 
-                                             fileName + ":" + fileSize);
-                        recipientWriter.flush();
-                    }
+                    // Notify recipient about incoming file
+                    recipientWriter.println(String.format(
+                        "%s:%s:incoming_file:%s:%d",
+                        sender, recipient, fileName, fileSize
+                    ));
+                    recipientWriter.flush();
                     
-                    // Save file
-                    FileOutputStream fos = new FileOutputStream(outFile);
-                    byte[] buffer = new byte[1024 * 1024];
-                    long totalRead = 0;
-                    
-                    while (totalRead < fileSize) {
-                        int chunkSize = dis.readInt();
-                        dis.readFully(buffer, 0, chunkSize);
-                        fos.write(buffer, 0, chunkSize);
-                        totalRead += chunkSize;
+                    // Receive and save the file
+                    try (FileOutputStream fos = new FileOutputStream(outputFile)) {
+                        byte[] buffer = new byte[BUFFER_SIZE];
+                        long totalRead = 0;
+                        int progress = 0;
                         
-                        // Update progress
-                        int progress = (int)((totalRead * 100) / fileSize);
-                        ta_chat.append("Receiving " + fileName + " from " + sender + 
-                                     ": " + progress + "%\n");
-                    }
-                    
-                    fos.close();
-                    ta_chat.append("File saved to: " + outFile.getAbsolutePath() + "\n");
-                    
-                    // Notify recipient of completed transfer
-                    if (recipientWriter != null) {
-                        recipientWriter.println(sender + ":" + recipient + ":file_received:" + 
-                                             uniqueFileName + ":" + downloadsPath);
-                        recipientWriter.flush();
+                        while (totalRead < fileSize) {
+                            int chunkSize = dis.readInt();
+                            if (chunkSize <= 0) break;
+                            
+                            dis.readFully(buffer, 0, chunkSize);
+                            fos.write(buffer, 0, chunkSize);
+                            totalRead += chunkSize;
+                            
+                            // Update progress every 5%
+                            int newProgress = (int)((totalRead * 100) / fileSize);
+                            if (newProgress >= progress + 5 || totalRead == fileSize) {
+                                progress = newProgress;
+                                ta_chat.append(String.format(
+                                    "Receiving %s: %d%% (%,d/%,d bytes)\n",
+                                    fileName, progress, totalRead, fileSize
+                                ));
+                            }
+                        }
+                        
+                        // Verify complete transfer
+                        if (totalRead == fileSize) {
+                            ta_chat.append("File saved to: " + outputFile.getAbsolutePath() + "\n");
+                            
+                            // Notify recipient of completed transfer
+                            recipientWriter.println(String.format(
+                                "%s:%s:file_received:%s:%s",
+                                sender, recipient, uniqueFileName, downloadsDir.getAbsolutePath()
+                            ));
+                            recipientWriter.flush();
+                            
+                            // Notify sender of successful transfer
+                            notifySender(sender, "file_success:" + recipient + ":" + fileName);
+                        } else {
+                            ta_chat.append("File transfer incomplete. Expected " + fileSize + 
+                                           " bytes, received " + totalRead + " bytes\n");
+                            outputFile.delete(); // Delete incomplete file
+                            notifySender(sender, "file_failed:" + recipient + ":Transfer incomplete");
+                        }
                     }
                 }
-                
-                dis.close();
-                sock.close();
-            } catch (Exception e) {
+            } catch (NumberFormatException e) {
+                ta_chat.append("Invalid file size format in transfer header\n");
+            } catch (IOException e) {
                 ta_chat.append("File transfer error: " + e.getMessage() + "\n");
+            } finally {
+                try {
+                    clientSocket.close();
+                } catch (IOException e) {
+                    ta_chat.append("Error closing file transfer socket: " + e.getMessage() + "\n");
+                }
+            }
+        }
+        
+        private void notifySender(String sender, String message) {
+            PrintWriter senderWriter = userWriters.get(sender);
+            if (senderWriter != null) {
+                senderWriter.println("Server:" + sender + ":" + message);
+                senderWriter.flush();
             }
         }
     }
     
     public void userAdd(String data) {
         users.add(data);
+        userListModel.addElement(data);
         broadcastUserList();
     }
     
     public void userRemove(String data) {
         users.remove(data);
+        userListModel.removeElement(data);
         broadcastUserList();
     }
     
@@ -438,4 +512,7 @@ public class server_frame extends javax.swing.JFrame {
     private javax.swing.JScrollPane jScrollPane1;
     private javax.swing.JLabel lb_name;
     private javax.swing.JTextArea ta_chat;
+    private javax.swing.JList<String> userList;
+    private javax.swing.JScrollPane userScrollPane;
+    private DefaultListModel<String> userListModel;
 }

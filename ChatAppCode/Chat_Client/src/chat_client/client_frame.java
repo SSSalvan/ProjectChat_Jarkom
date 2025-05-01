@@ -502,6 +502,18 @@ public class client_frame extends javax.swing.JFrame
             return;
         }
         
+        // Show confirmation dialog
+        int confirm = JOptionPane.showConfirmDialog(
+            this,
+            "Send file to " + recipient + "?",
+            "Confirm File Transfer",
+            JOptionPane.YES_NO_OPTION
+        );
+        
+        if (confirm != JOptionPane.YES_OPTION) {
+            return;
+        }
+        
         JFileChooser fileChooser = new JFileChooser();
         int returnVal = fileChooser.showOpenDialog(this);
         
